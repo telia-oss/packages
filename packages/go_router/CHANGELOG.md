@@ -1,3 +1,7 @@
+## 10.2.0
+
+- Adds preload support to StatefulShellRoute, configurable via `lazy` parameter on StatefulShellBranch.
+
 ## 12.1.2
 
 * Fixes an incorrect use of `extends` for Dart 3 compatibility.

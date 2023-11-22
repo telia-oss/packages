@@ -216,11 +216,15 @@ class RouteBuilder {
     final RouteBase route = match.route;
     final GoRouterState state = buildState(matchList, match);
     Page<Object?>? page;
+
+    void buildNext(RouteMatchList matches, GlobalKey<NavigatorState> key) =>
+        _buildRecursive(context, matches, startIndex + 1, pagePopContext,
+            routerNeglect, keyToPages, key, registry);
+
     if (state.error != null) {
       page = _buildErrorPage(context, state);
       keyToPages.putIfAbsent(navigatorKey, () => <Page<Object?>>[]).add(page);
-      _buildRecursive(context, matchList, startIndex + 1, pagePopContext,
-          routerNeglect, keyToPages, navigatorKey, registry);
+      buildNext(matchList, navigatorKey);
     } else {
       // If this RouteBase is for a different Navigator, add it to the
       // list of out of scope pages
@@ -236,8 +240,8 @@ class RouteBuilder {
               .add(page);
         }
 
-        _buildRecursive(context, matchList, startIndex + 1, pagePopContext,
-            routerNeglect, keyToPages, navigatorKey, registry);
+
+            buildNext(matchList, navigatorKey);
       } else if (route is ShellRouteBase) {
         assert(startIndex + 1 < matchList.matches.length,
             'Shell routes must always have child routes');
@@ -258,25 +262,40 @@ class RouteBuilder {
         keyToPages.putIfAbsent(shellNavigatorKey, () => <Page<Object?>>[]);
 
         // Build the remaining pages
-        _buildRecursive(context, matchList, startIndex + 1, pagePopContext,
-            routerNeglect, keyToPages, shellNavigatorKey, registry);
+        buildNext(matchList, shellNavigatorKey);
 
-        final HeroController heroController = _goHeroCache.putIfAbsent(
+         _goHeroCache.putIfAbsent(
             shellNavigatorKey, () => _getHeroController(context));
 
         // Build the Navigator for this shell route
         Widget buildShellNavigator(
+          GlobalKey<NavigatorState> navigatorKey,
           List<NavigatorObserver>? observers,
           String? restorationScopeId, {
           bool requestFocus = true,
+          RouteMatchList? preloadedNavigatorMatches,
         }) {
+          if (preloadedNavigatorMatches != null &&
+              keyToPages[navigatorKey] == null) {
+            // Preloaded RouteMatchList must point to a route that is a
+            // descendant of the current shell route.
+            assert(
+                preloadedNavigatorMatches.matches[startIndex].route == route);
+
+            // Build the pages for this preloadable navigator
+            buildNext(preloadedNavigatorMatches, navigatorKey);
+
+            _goHeroCache.putIfAbsent(
+                navigatorKey, () => _getHeroController(context));
+          }
+
           return _buildNavigator(
             pagePopContext.onPopPage,
-            keyToPages[shellNavigatorKey]!,
-            shellNavigatorKey,
+            keyToPages[navigatorKey]!,
+            navigatorKey,
             observers: observers ?? const <NavigatorObserver>[],
             restorationScopeId: restorationScopeId,
-            heroController: heroController,
+            heroController: _goHeroCache[navigatorKey],
             requestFocus: requestFocus,
           );
         }
